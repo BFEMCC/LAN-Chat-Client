@@ -42,7 +42,8 @@ int EptyLength2 = 0;
 std::wstring SendWstr = L"";
 std::string SendStr = "";
 int SendLength = 0;
-std::string LocalIP = "";
+//std::string WifiIP = "";
+std::string SocketIP = "";
 std::string strrecv = "";
 std::wstring wsrtrecv = L"";
 const char* CharSend = nullptr;
@@ -66,12 +67,10 @@ std::wstring stringTowstring(std::string str);
 std::string wstringTostring(std::wstring wstr);
 std::string GetCurrentTimeStr();
 std::string GetClientInfo(SOCKET sock);
-std::string getWirelessAdapterIPV4Address();
+//std::string getWirelessAdapterIPV4Address();
+std::string getLocalSocketAddrName(int socketFd);
 bool is_valid_ip(const std::wstring& ip);
-void CloseAllAndExit();
-void CloseALL();
-void CloseFile();
-void CloseFileAndhThread();
+void closeOperations(bool closeFile, bool closeThread, bool cleanInt, bool exitProgram);
 void WINAPI ThreadRecv(LPVOID lpParameter);
 
 
@@ -232,7 +231,7 @@ lab1:
     hiex::SysStatic Tips;
     Tips.Create(mainwnd.GetHandle(), 10, 587, 230, 60);
     Tips.SetFont(18, 0, FONT);
-    Tips.SetText(L"版本：1.1\r\n"
+    Tips.SetText(L"版本：1.2\r\n"
         L"感谢使用，期待关注！\r\n"
         L"本软件完全免费！若您收费获得请举报商家");
 
@@ -251,7 +250,8 @@ lab1:
     }
 
     //6、发送及其他功能
-    LocalIP = getWirelessAdapterIPV4Address();
+   // WifiIP = getWirelessAdapterIPV4Address();
+    SocketIP = getLocalSocketAddrName(TcpSocket);
     while (mainwnd.IsAlive())
     {
         Sleep(50);
@@ -265,7 +265,7 @@ lab1:
             {
                 filed.open("ChatHistory.txt", std::ofstream::trunc);
                 filed.close();
-                CloseFile();
+                closeOperations(true, false, false, false);
             }
            mainwnd.CloseWindow();
            closesocket(TcpSocket);
@@ -295,7 +295,7 @@ lab1:
                 else
                 {
                     SendEdit.SetText(L"");
-                    SendStr = GetCurrentTimeStr() + "__" + LocalIP+"_向_"+ CHARIP+"_"+ std::to_string(PORT)+"_-发送->： " + wstringTostring(SendWstr);
+                    SendStr = GetCurrentTimeStr() + "_" + SocketIP + "_[向]_[" + CHARIP + "_" + std::to_string(PORT) + "]_[发送]>>：" + wstringTostring(SendWstr);
                     while (true)//等待文件关闭
                     {
                         if (!filew.is_open() && !filer.is_open())
@@ -358,14 +358,14 @@ lab1:
                 {
                     if (MessageBox(mainwnd.GetHandle(), L"是否保存聊天记录？\r\n提示：已清空的记录不会保存", L"提示", MB_OKCANCEL | MB_ICONINFORMATION) == IDOK)
                     {
-                        CloseAllAndExit();
+                        closeOperations(true, true, true, true);
                     }
-                    CloseALL();
+                    closeOperations(true, true, true, false);
                     filed.open("ChatHistory.txt", std::ofstream::trunc);
                     filed.close();
                     exit(0);
                 }
-                CloseAllAndExit();
+                closeOperations(true, true, true, true);
             }
             continue;
         }
@@ -376,7 +376,7 @@ lab1:
             {
                 if (_access("ChatHistory.txt", 0) == 0)
                 {
-                    CloseAllAndExit();
+                    closeOperations(true, true, true, true);
                 }
                 else
                 {
@@ -391,7 +391,7 @@ lab1:
         {
             if (MessageBox(mainwnd.GetHandle(), L"是否确认清空聊天记录？", L"提示", MB_OKCANCEL | MB_ICONEXCLAMATION) == IDOK)
             {
-                CloseFile();
+                closeOperations(true, false, false, false);
                 filed.open("ChatHistory.txt", std::ofstream::trunc);
                 filed.close();
                 RecvEdit.SetText(L"");
@@ -430,11 +430,11 @@ lab1:
     {
         if (MessageBox(nullptr, L"是否保存聊天记录？", L"提示", MB_OKCANCEL | MB_ICONINFORMATION) == IDOK )
         {
-            CloseAllAndExit();
+            closeOperations(true, true, true, true);
         }
         else
         {
-            CloseALL();
+            closeOperations(true, true, true, false);
             filed.open("ChatHistory.txt", std::ofstream::trunc);
             filed.close();
             exit(0);
@@ -526,12 +526,12 @@ std::string GetCurrentTimeStr()
     SYSTEMTIME sys_time;
     GetLocalTime(&sys_time);
     char time_str[30];
-    sprintf_s(time_str, "%04d/%02d/%02d__%02d:%02d:%02d", sys_time.wYear, sys_time.wMonth, sys_time.wDay, sys_time.wHour, sys_time.wMinute, sys_time.wSecond);
+    sprintf_s(time_str, "[%04d/%02d/%02d_%02d:%02d:%02d]", sys_time.wYear, sys_time.wMonth, sys_time.wDay, sys_time.wHour, sys_time.wMinute, sys_time.wSecond);
     std::string str_time(time_str);
     return (str_time);
 }
 
-// 获取发送消息方的IP地址和端口信息
+//获取发送消息方的IP地址和端口信息
 std::string GetClientInfo(SOCKET sock) 
 {  
     sockaddr_in client_addr;
@@ -539,54 +539,89 @@ std::string GetClientInfo(SOCKET sock)
     getpeername(sock, (sockaddr*)&client_addr, &addr_len);
     char* ip_str = inet_ntoa(client_addr.sin_addr);
     int port = ntohs(client_addr.sin_port);
-    std::string client_info = std::string(ip_str) + "__" + std::to_string(port) + "__";
+    std::string client_info = "[" + std::string(ip_str) + "_" + std::to_string(port) + "]";
     return client_info;
 }
 
-//获取本地IP地址
-std::string getWirelessAdapterIPV4Address()
+//获取本地无线局域网IP地址
+//std::string getWirelessAdapterIPV4Address()
+//{
+//    std::string ipAddress = "";
+//    PIP_ADAPTER_INFO pAdapterInfo;
+//    PIP_ADAPTER_INFO pAdapter = NULL;
+//    ULONG ulOutBufLen = sizeof(IP_ADAPTER_INFO);
+//    DWORD dwRetVal = 0;
+//
+//    pAdapterInfo = (IP_ADAPTER_INFO*)malloc(sizeof(IP_ADAPTER_INFO));
+//    if (pAdapterInfo == NULL) 
+//    {
+//        return ipAddress;
+//    }
+//
+//    if (GetAdaptersInfo(pAdapterInfo, &ulOutBufLen) == ERROR_BUFFER_OVERFLOW) 
+//    {
+//        free(pAdapterInfo);
+//        pAdapterInfo = (IP_ADAPTER_INFO*)malloc(ulOutBufLen);
+//        if (pAdapterInfo == NULL) 
+//        {
+//            return ipAddress;
+//        }
+//    }
+//    if ((dwRetVal = GetAdaptersInfo(pAdapterInfo, &ulOutBufLen)) == NO_ERROR) 
+//    {
+//        pAdapter = pAdapterInfo;
+//        while (pAdapter) {
+//            if (pAdapter->Type == MIB_IF_TYPE_IEEE80211) 
+//            {
+//                IP_ADDR_STRING* pIpAddrString = &(pAdapter->IpAddressList);
+//                while (pIpAddrString) {
+//                    if (pIpAddrString->IpAddress.String[0] != '0') 
+//                    {
+//                        ipAddress = pIpAddrString->IpAddress.String;
+//                        break;
+//                    }
+//                    pIpAddrString = pIpAddrString->Next;
+//                }
+//                break;
+//            }
+//            pAdapter = pAdapter->Next;
+//        }
+//    }
+//
+//    if (pAdapterInfo) {
+//        free(pAdapterInfo);
+//    }
+//
+//    return ipAddress;
+//}
+
+//获取软件运行时使用的的地址和端口
+std::string getLocalSocketAddrName(int socketFd)
 {
-    std::string ipAddress = "";
-    PIP_ADAPTER_INFO pAdapterInfo;
-    PIP_ADAPTER_INFO pAdapter = NULL;
-    ULONG ulOutBufLen = sizeof(IP_ADAPTER_INFO);
-    DWORD dwRetVal = 0;
-
-    pAdapterInfo = (IP_ADAPTER_INFO*)malloc(sizeof(IP_ADAPTER_INFO));
-    if (pAdapterInfo == NULL) {
-        return ipAddress;
+    sockaddr_in SocketAddr;
+    socklen_t nLen = sizeof(SocketAddr);
+    memset(&SocketAddr, 0, sizeof(SocketAddr));
+    int nRet = getsockname(socketFd, reinterpret_cast<sockaddr*>(&SocketAddr), &nLen);
+    if (nRet == 0)
+    {
+        uint32_t ip = ntohl(SocketAddr.sin_addr.s_addr);
+        uint16_t port = ntohs(SocketAddr.sin_port);
+        char strIp[20];
+        snprintf(strIp, sizeof(strIp), "%d.%d.%d.%d",
+            static_cast<unsigned char>((ip >> 24) & 0xFF),
+            static_cast<unsigned char>((ip >> 16) & 0xFF),
+            static_cast<unsigned char>((ip >> 8) & 0xFF),
+            static_cast<unsigned char>(ip & 0xFF));
+        std::string result(strIp);
+        result += "_";
+        result += std::to_string(port);
+        result = "[" + result + "]";
+        return result;
     }
-
-    if (GetAdaptersInfo(pAdapterInfo, &ulOutBufLen) == ERROR_BUFFER_OVERFLOW) {
-        free(pAdapterInfo);
-        pAdapterInfo = (IP_ADAPTER_INFO*)malloc(ulOutBufLen);
-        if (pAdapterInfo == NULL) {
-            return ipAddress;
-        }
+    else
+    {
+        return "";
     }
-    if ((dwRetVal = GetAdaptersInfo(pAdapterInfo, &ulOutBufLen)) == NO_ERROR) {
-        pAdapter = pAdapterInfo;
-        while (pAdapter) {
-            if (pAdapter->Type == MIB_IF_TYPE_IEEE80211) {
-                IP_ADDR_STRING* pIpAddrString = &(pAdapter->IpAddressList);
-                while (pIpAddrString) {
-                    if (pIpAddrString->IpAddress.String[0] != '0') {
-                        ipAddress = pIpAddrString->IpAddress.String;
-                        break;
-                    }
-                    pIpAddrString = pIpAddrString->Next;
-                }
-                break;
-            }
-            pAdapter = pAdapter->Next;
-        }
-    }
-
-    if (pAdapterInfo) {
-        free(pAdapterInfo);
-    }
-
-    return ipAddress;
 }
 
 //正则判断ip地址是否合法
@@ -609,65 +644,35 @@ bool is_valid_ip(const std::wstring& ip)
     return false;
 }
 
-void CloseAllAndExit()
+//关闭文件、线程、网络库、退出相关
+void closeOperations(bool closeFile, bool closeThread, bool cleanInt, bool exitProgram)
 {
-    if (filew.is_open())
+    if (closeFile)
     {
-        filew.close();
+        if (filew.is_open())
+        {
+            filew.close();
+        }
+        if (filer.is_open())
+        {
+            filer.close();
+        }
     }
-    if (filer.is_open())
-    {
-        filer.close();
-    }
-    if (hThread != NULL)
+
+    if (closeThread && hThread != NULL)
     {
         CloseHandle(hThread);
     }
-    closesocket(TcpSocket);
-    WSACleanup();
-    exit(0);
-}
-void CloseALL()
-{
-    if (filew.is_open())
+
+    if (cleanInt)
     {
-        filew.close();
+        closesocket(TcpSocket);
+        WSACleanup();
     }
-    if (filer.is_open())
+
+    if (exitProgram)
     {
-        filer.close();
-    }
-    if (hThread != NULL)
-    {
-        CloseHandle(hThread);
-    }
-    closesocket(TcpSocket);
-    WSACleanup();
-}
-void CloseFile()
-{
-    if (filew.is_open())
-    {
-        filew.close();
-    }
-    if (filer.is_open())
-    {
-        filer.close();
-    }
-}
-void CloseFileAndhThread()
-{
-    if (filew.is_open())
-    {
-        filew.close();
-    }
-    if (filer.is_open())
-    {
-        filer.close();
-    }
-    if (hThread != NULL)
-    {
-        CloseHandle(hThread);
+        exit(0);
     }
 }
 
@@ -697,7 +702,7 @@ void __stdcall ThreadRecv(LPVOID lpParameter)
                     else
                     {
                         strrecv = "";
-                        strrecv = (GetClientInfo(TcpSocket) + GetCurrentTimeStr() + " --->： " + charToString(recv_buf));
+                        strrecv =GetCurrentTimeStr() +"_" + getLocalSocketAddrName(TcpSocket)+"_[接收_来自]_"+ GetClientInfo(TcpSocket) + " >>：" + charToString(recv_buf);
                         filew << strrecv << std::endl;//接收到的内容写入文件保存并换行
                         filew.close();
                         Sleep(100);
@@ -737,7 +742,7 @@ void __stdcall ThreadRecv(LPVOID lpParameter)
         else//断开连接
         {
             ConnectStatus = false;
-            CloseFile();
+            closeOperations(true, false, false, false);
             return;
         }
     }
