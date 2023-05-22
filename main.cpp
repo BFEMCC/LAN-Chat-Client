@@ -1,7 +1,9 @@
-﻿#define _CRT_SECURE_NO_WARNINGS
+﻿//1.3更新
+#define _CRT_SECURE_NO_WARNINGS
 #define _WINSOCK_DEPRECATED_NO_WARNINGS
 #define MAX_BUF_SIZE 1024 
 #define MIB_IF_TYPE_IEEE80211 71
+#define VERSION L"版本：1.3"
 #include <iostream>
 #include <winsock2.h>
 #include <ws2tcpip.h>
@@ -231,7 +233,7 @@ lab1:
     hiex::SysStatic Tips;
     Tips.Create(mainwnd.GetHandle(), 10, 587, 230, 60);
     Tips.SetFont(18, 0, FONT);
-    Tips.SetText(L"版本：1.2\r\n"
+    Tips.SetText(VERSION L"\r\n"
         L"感谢使用，期待关注！\r\n"
         L"本软件完全免费！若您收费获得请举报商家");
 
@@ -380,7 +382,7 @@ lab1:
                 }
                 else
                 {
-                    MessageBox(mainwnd.GetHandle(), L"记录文件不存在或已删除\r\n将直接退出", L"提示", MB_OKCANCEL | MB_ICONEXCLAMATION);
+                    MessageBox(mainwnd.GetHandle(), L"记录文件不存在或已删除", L"提示", MB_OK | MB_ICONEXCLAMATION);
                     exit(0);
                 }
             }
@@ -389,55 +391,78 @@ lab1:
 
         if (ClearHistory.IsClicked())//清空聊天记录
         {
-            if (MessageBox(mainwnd.GetHandle(), L"是否确认清空聊天记录？", L"提示", MB_OKCANCEL | MB_ICONEXCLAMATION) == IDOK)
+            if (_access("ChatHistory.txt", 0) == 0)//如果文件存在
             {
-                closeOperations(true, false, false, false);
-                filed.open("ChatHistory.txt", std::ofstream::trunc);
-                filed.close();
-                RecvEdit.SetText(L"");
+                if (MessageBox(mainwnd.GetHandle(), L"是否确认清空聊天记录？", L"提示", MB_OKCANCEL | MB_ICONEXCLAMATION) == IDOK)
+                {
+                    closeOperations(true, false, false, false);
+                    filed.open("ChatHistory.txt", std::ofstream::trunc);
+                    filed.close();
+                    RecvEdit.SetText(L"");
+                }
+                continue;
             }
-            continue;
+            else
+            {
+                MessageBox(mainwnd.GetHandle(), L"文件不存在或已删除", L"提示", MB_OK | MB_ICONERROR);
+                continue;
+            }
         }
 
-        if (DeleteChatLogFile.IsClicked())
+        if (DeleteChatLogFile.IsClicked())//点击删除记录文件按钮
         {
             while (true)//等待文件关闭
             {
                 if (!filew.is_open() && !filer.is_open())
                 {
-                    if (MessageBox(mainwnd.GetHandle(), L"是否确认删除？", L"提示", MB_OKCANCEL | MB_ICONEXCLAMATION) == IDOK)
+                    if (_access("ChatHistory.txt", 0) == 0)//如果记录存在
                     {
-                        if (remove("ChatHistory.txt") != 0)
+                        if (MessageBox(mainwnd.GetHandle(), L"是否确认删除？", L"提示", MB_OKCANCEL | MB_ICONEXCLAMATION) == IDOK)
                         {
-                            MessageBox(mainwnd.GetHandle(), L"删除失败\r\n文件不存在或已删除", L"提示", MB_OK | MB_ICONERROR);
-                            break;
+                            if (remove("ChatHistory.txt") == 0)
+                            {
+                                RecvEdit.SetText(L"");
+                                MessageBox(mainwnd.GetHandle(), L"删除成功\r\n聊天记录文件已删除", L"提示", MB_OK | MB_ICONINFORMATION);
+                                break;
+                            }
+                            else
+                            {
+                                MessageBox(mainwnd.GetHandle(), L"删除失败\r\n文件不存在或已删除", L"提示", MB_OK | MB_ICONERROR);
+                                break;
+                            }
                         }
-                        else
-                        {
-                            RecvEdit.SetText(L"");
-                            MessageBox(mainwnd.GetHandle(), L"删除成功\r\n聊天记录文件已删除", L"提示", MB_OK | MB_ICONINFORMATION);
-                            break;
-                        }
+                        break;
                     }
-                    break;
+                    else
+                    {
+                        MessageBox(mainwnd.GetHandle(), L"文件不存在或已删除", L"提示", MB_OK | MB_ICONERROR);
+                        break;
+                    }
                 }
                 Sleep(5);
             }
             continue;
         }
     }
-    if (!mainwnd.IsAlive())
+    if (!mainwnd.IsAlive())//直接点x关闭窗口
     {
-        if (MessageBox(nullptr, L"是否保存聊天记录？", L"提示", MB_OKCANCEL | MB_ICONINFORMATION) == IDOK )
+        if (_access("ChatHistory.txt", 0) == 0) //如果记录文件存在
         {
-            closeOperations(true, true, true, true);
+            if (MessageBox(nullptr, L"是否保存聊天记录？\r\n提示：已清空的记录不会保存", L"提示", MB_OKCANCEL | MB_ICONINFORMATION) == IDOK)
+            {
+                closeOperations(true, true, true, true);
+            }
+            else
+            {
+                closeOperations(true, true, true, false);
+                filed.open("ChatHistory.txt", std::ofstream::trunc);
+                filed.close();
+                exit(0);
+            }
         }
         else
         {
-            closeOperations(true, true, true, false);
-            filed.open("ChatHistory.txt", std::ofstream::trunc);
-            filed.close();
-            exit(0);
+            closeOperations(true, true, true, true);
         }
     }
     return 0;
